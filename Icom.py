@@ -20,7 +20,6 @@ CLOUDLOG_RIG = "Your Radio Name"
 
 import time
 import datetime
-import socket
 import requests
 import serial
 
@@ -39,7 +38,14 @@ cat_ser = serial.Serial(ICOM_COM, ICOM_BAUD, timeout=1, rtscts=False, dsrdtr=Fal
 print(cat_ser.name, cat_ser.baudrate)
 print("Connected.")
 
+def flush_uart_rx_buffer():
+    # empty anything that's in the buffer before we start
+    cat_ser.flush()
+    cat_ser.flushInput()
+    cat_ser.read_all()
+
 def send_civ_command(command, data=b'', preamble=b''):
+    flush_uart_rx_buffer()
     cat_ser.write(preamble + b'\xFE\xFE' + CIV_RIG + CIV_PC + command + data + b'\xFD')
     # If CIV_ECHO is on (on the radio or old CIV cable), then we must empty the buffer of what we sent.
     cat_ser.read_until(expected=b'\xFD')
@@ -50,17 +56,20 @@ def send_civ_command(command, data=b'', preamble=b''):
 def read_radio_freq():
     data = send_civ_command(b'\x03')
     if data[4] == 3: # if we got a frequency back
-        freq = 0
-        freq += 1E1 * ((data[5] >> 4) & 0xF) # Byte 5, Upper Nibble
-        freq += 1E0 * (data[5] & 0xF)        # Byte 5, Lower Nibble
-        freq += 1E3 * ((data[6] >> 4) & 0xF) # Byte 6, Upper Nibble
-        freq += 1E2 * (data[6] & 0xF)        # Byte 6, Lower Nibble
-        freq += 1E5 * ((data[7] >> 4) & 0xF) # Byte 7, Upper Nibble
-        freq += 1E4 * (data[7] & 0xF)        # Byte 7, Lower Nibble
-        freq += 1E7 * ((data[8] >> 4) & 0xF) # Byte 8, Upper Nibble
-        freq += 1E6 * (data[8] & 0xF)        # Byte 8, Lower Nibble
-        freq += 1E9 * ((data[9] >> 4) & 0xF) # Byte 9, Upper Nibble
-        freq += 1E8 * (data[9] & 0xF)        # Byte 9, Lower Nibble
+        try:
+            freq = 0
+            freq += 1E1 * ((data[5] >> 4) & 0xF) # Byte 5, Upper Nibble
+            freq += 1E0 * (data[5] & 0xF)        # Byte 5, Lower Nibble
+            freq += 1E3 * ((data[6] >> 4) & 0xF) # Byte 6, Upper Nibble
+            freq += 1E2 * (data[6] & 0xF)        # Byte 6, Lower Nibble
+            freq += 1E5 * ((data[7] >> 4) & 0xF) # Byte 7, Upper Nibble
+            freq += 1E4 * (data[7] & 0xF)        # Byte 7, Lower Nibble
+            freq += 1E7 * ((data[8] >> 4) & 0xF) # Byte 8, Upper Nibble
+            freq += 1E6 * (data[8] & 0xF)        # Byte 8, Lower Nibble
+            freq += 1E9 * ((data[9] >> 4) & 0xF) # Byte 9, Upper Nibble
+            freq += 1E8 * (data[9] & 0xF)        # Byte 9, Lower Nibble
+        except:
+            freq = -1 # sometimes data changes before the entire frame is sent (like if spinning VFO quickly)
     else:
         freq = -1
     return freq # In Hz
@@ -95,11 +104,13 @@ while True:
     # poll for freq/mode
     freq = read_radio_freq()
     mode = read_radio_mode()
+    if (mode == -1) or (freq < 0):
+        continue # on error, just carry on
     # if changed, print to screen and update server
     if oldfreq != freq or oldmode != mode:
         oldfreq = freq
         oldmode = mode
-        timestamp = datetime.datetime.utcnow().strftime("%Y/%m/%d %H:%M")
+        timestamp = datetime.datetime.utcnow().strftime("%Y/%m/%d %H:%M:%S")
         print("%s     Freq %.6f MHz      Mode %s" % (timestamp, freq/1e6, mode))
         clresp = send_to_cloudlog(timestamp, freq, mode)
         if clresp.status_code == 200:
