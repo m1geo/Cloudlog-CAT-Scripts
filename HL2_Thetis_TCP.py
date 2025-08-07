@@ -13,9 +13,9 @@ SDR_IP = "localhost"
 SDR_PORT = 13013
 
 # Your CloudLog Server details
-CLOUDLOG_URL = "https://www.george-smart.co.uk/Cloudlog/index.php/api/radio"
-CLOUDLOG_KEY = "cl668f1b449aae0"
-CLOUDLOG_RIG = "Hermes-Lite 2 (Shack)"
+CLOUDLOG_URL = "https://your_web_domain.tld/Cloudlog/index.php/api/radio"
+CLOUDLOG_KEY = "clXXXXXXXXXXXXX"
+CLOUDLOG_RIG = "Your Radio Name"
 
 import time
 import datetime
@@ -93,4 +93,5 @@ while True:
             print("OK")
         else:
             print(clresp)
+
     time.sleep(1)
